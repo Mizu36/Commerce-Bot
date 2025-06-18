@@ -1,0 +1,6 @@
+.env
+TODO
+/venv
+/data
+.vscode/
+__pycache__/

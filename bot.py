@@ -23,10 +23,10 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 FILEPATHS = [SETTINGS_FILE, USERS_FILE, SHOP_FILE, PREDICTIONS_FILE]
-LIST_OF_COMMANDS = ["!bet", "!shop", "!wallet", "!buy", "!sell", "!predictions", "!auction_item", "!auctions", "!bid", "!inventory", "!reward", "!create_auction", "!create_prediction", "!close_prediction", "!resolve_prediction", "!create_shop_item", "!delete_shop_item", "!edit_shop_item", "!reset_user_inventory", "!reset_user", "!purge_deprecated_users", "!set_default_channel", "!toggle_command"]
+LIST_OF_COMMANDS = ["!bet", "!shop", "!wallet", "!buy", "!sell", "!predictions", "!auction_item", "!auctions", "!bid", "!inventory", "!my_bets", "!reward", "!create_auction", "!create_prediction", "!close_prediction", "!resolve_prediction", "!create_shop_item", "!delete_shop_item", "!edit_shop_item", "!reset_user_inventory", "!reset_user", "!purge_deprecated_users", "!set_default_channel", "!toggle_command"]
 USER_COMMANDS = []
 MODERATOR_COMMANDS = []
-DEBUG = True
+DEBUG = False
 
 COMMAND_QUEUE = []
 
@@ -53,7 +53,8 @@ async def add_server_to_jsons(server_id):
                 "!auction_item": True,
                 "!auctions": True,
                 "!bid": True,
-                "!inventory": True
+                "!inventory": True,
+                "!my_bets": True
             },
             "Privileged Commands":{
                 "!reward": True,
@@ -102,7 +103,8 @@ async def add_user_to_json(server_id, user_id):
     name = await get_display_name(server_id, user_id)
     user_name = await get_user_name(server_id, user_id)
     if user_id not in users[server_id]:
-        print("User_id not in users[server_id]")
+        if DEBUG:
+            print("[yellow]User_id not in users[server_id]")
         users[server_id][user_id] = {
             "display_name": name,
             "user_name": user_name,
@@ -171,7 +173,8 @@ async def remove_prediction_data(server_id, title = None, prediction_number = No
         if prediction_number in predictions[server_id]["Predictions"]:
             del predictions[server_id]["Predictions"][str(prediction_number)]
         else:
-            print("Invalid prediction_number provided.")
+            if DEBUG:
+                print("[red]Invalid prediction_number provided.")
             return
     elif title:
         found_bet = False
@@ -181,7 +184,8 @@ async def remove_prediction_data(server_id, title = None, prediction_number = No
                 found_bet = True
                 break
         if not found_bet:
-            print("Invalid prediction_title provided.")
+            if DEBUG:
+                print("[red]Invalid prediction_title provided.")
             return
     await async_save_json(PREDICTIONS_FILE, predictions)
 
@@ -205,7 +209,8 @@ async def create_prediction(message = None, title = None, options = None, server
 
         options_list = re.findall(r"\(([^)]+)\)", options_str)
         if len(options_list) != num_options:
-            print(f"Invalid number of parameters. User stated {num_options} options, but provided {len(options_list)}")
+            if DEBUG:
+                print(f"[red]Invalid number of parameters. User stated {num_options} options, but provided {len(options_list)}")
             await send_message(f"Invalid Parameters. User stated {num_options} options, but provided {len(options_list)}!", channel_id)
             return
         options = {i + 1: option for i, option in enumerate(options_list)}
@@ -214,7 +219,8 @@ async def create_prediction(message = None, title = None, options = None, server
         await add_prediction_to_json(title, options, server_id)
         await send_message(f"Prediction: \"{title}\" was created.", channel_id)
     else:
-        print(f"Some parameters empty, can't create prediction.")
+        if DEBUG:
+            print(f"[red]Some parameters empty, can't create prediction.")
         return
 
 async def close_prediction(message = None, bet_number = None, server_id = None, channel_id = None): #!close_prediction <name OR id>
@@ -255,7 +261,8 @@ async def parse_resolve_command(message):
     pattern = r"!resolve_prediction\s+(?:(\d+)|\(([^)]+)\))\s+(?:(\d+)|\(([^)]+)\))"
     match = re.match(pattern, content)
     if not match:
-        print("Invalid syntax. [SYNTAX] !resolve_prediction <number or (name)> <number or (option_name)>")
+        if DEBUG:
+            print("[red]Invalid syntax. [SYNTAX] !resolve_prediction <number or (name)> <number or (option_name)>")
         return False
 
     bet_number = match.group(1)
@@ -558,12 +565,14 @@ async def ensure_file_exists(filepath):
     if not os.path.exists(filepath):
         async with aiofiles.open(filepath, "w", encoding="utf-8") as f:
             await f.write(json.dumps({}, indent=4))
-        print(f"JSON not found. {filepath} was created")
+        if DEBUG:
+            print(f"[yellow]JSON not found. {filepath} was created")
 
 async def populate_data_folder():
     for file in FILEPATHS:
         await ensure_file_exists(file)
-        print(f"{file} checked or created.")
+        if DEBUG:
+            print(f"[green]{file} checked or created.")
 
 # Load/Save helpers
 async def async_load_json(path):
@@ -629,6 +638,9 @@ async def check_for_command(message):
             return
         elif command == "!inventory": #!inventory
             await handle_inventory(message) #Tested and Working
+            return
+        elif command == "!my_bets": #Tested and Working
+            await handle_my_bets(message)
             return
     elif command in MODERATOR_COMMANDS and await validate_user_permission(server_id, user_id):
         if command == "!reward": #!reward <amount> <user_name or user_id or user_display_name>
@@ -976,7 +988,8 @@ async def auction_timer(server_id, auction_id, end_time):
     if seconds_remaining <= 0:
         await resolve_auction(server_id, auction_id)
         return
-    print(f"Seconds remaining for auction: {seconds_remaining}")
+    if DEBUG:
+        print(f"[green]Seconds remaining for auction: {seconds_remaining}")
 
     await asyncio.sleep(seconds_remaining)
     await resolve_auction(server_id, auction_id)
@@ -1058,12 +1071,14 @@ async def resolve_auction(server_id, auction_id):
             if default_channel:
                 await send_message(early_failure_reason, default_channel)
             else:
-                print("DEFAULT CHANNEL NOT SET!", early_failure_reason)
+                if DEBUG:
+                    print("[yellow]DEFAULT CHANNEL NOT SET!", early_failure_reason)
         else:
             if default_channel:
                 await send_message(early_failure_reason, default_channel)
             else:
-                print("DEFAULT CHANNEL NOT SET!", early_failure_reason)
+                if DEBUG:
+                    print("[yellow]DEFAULT CHANNEL NOT SET!", early_failure_reason)
     else:
         # Send winner announcement
         success_message = (
@@ -1073,7 +1088,8 @@ async def resolve_auction(server_id, auction_id):
         if default_channel:
             await send_message(success_message, default_channel)
         else:
-            print("DEFAULT CHANNEL NOT SET!", success_message)
+            if DEBUG:
+                print("[yellow]DEFAULT CHANNEL NOT SET!", success_message)
 
     # Final cleanup: delete the auction and save
     del shop[server_id]["Auctions"][auction_id]
@@ -1081,6 +1097,45 @@ async def resolve_auction(server_id, auction_id):
         async_save_json(SHOP_FILE, shop),
         async_save_json(USERS_FILE, users)
     )
+
+
+async def handle_my_bets(message):
+    user_id = str(message.author.id)
+    server_id = str(message.guild.id)
+    channel_id = message.channel.id
+    user_bets_summary = []
+
+    predictions = await async_load_json(PREDICTIONS_FILE)
+
+
+    server_predictions = predictions.get(server_id, {}).get("Predictions", {})
+
+    for pred_id, prediction in server_predictions.items():
+        if prediction.get("open", False):  # Only include open predictions
+            user_bet = prediction.get("user_bets", {}).get(user_id)
+            if user_bet:
+                option_num = user_bet["option"]
+                option_label = prediction["options"].get(option_num, "Unknown Option")
+                amount = user_bet["amount"]
+                title = prediction["title"]
+
+                user_bets_summary.append(f"**{title}**\n🪙 Bet `{amount}` on **{option_label}**\n")
+
+    if not user_bets_summary:
+        embed = discord.Embed(
+            title="📊 Your Current Bets",
+            description="You have no active bets right now.",
+            color=discord.Color.gold()
+        )
+    else:
+        embed = discord.Embed(
+            title="📊 Your Current Bets",
+            description="\n".join(user_bets_summary),
+            color=discord.Color.gold()
+        )
+
+    await send_embed_message(embed, channel_id)
+
 
 
 async def create_auction(name, item_id, quantity, starting_bid, value, duration_minutes, user_id, server_id):
@@ -1140,7 +1195,8 @@ async def handle_bid(message): #!bid <auction_id> <amount_of_money>
                     shop[server_id]["Auctions"][auction_id]["current_highest_bidder_id"] = user_id
                     await async_save_json(SHOP_FILE, shop)
         else:
-            print("[ERROR] User not found in users.json. Was there an issue with the create_user method?")
+            if DEBUG:
+                print("[red][ERROR] User not found in users.json. Was there an issue with the create_user method?")
     else:
         await send_message(f"Auction ID {auction_id} does not exist or has already ended, please try again.", channel_id)
         return
@@ -1266,7 +1322,8 @@ async def handle_edit_shop_item(message):
     
     if match:
         name = match.group(1)
-        print(name)
+        if DEBUG:
+            print(name)
 
     found = False
     for key, item in shop[str(server_id)]["Items"].items():
@@ -1282,7 +1339,8 @@ async def handle_edit_shop_item(message):
     attr_val_pattern = r"\(([^)]+)\)\s+\(([^)]+)\)"
     attr_val_matches = re.findall(attr_val_pattern, tail)
     updates = {attr: val for attr, val in attr_val_matches}
-    print(updates)
+    if DEBUG:
+        print(updates)
 
     for attr, val in updates.items():
         if attr.lower() in ["name", "price", "quantity", "refresh_time"]:
@@ -1398,14 +1456,16 @@ async def handle_purge_deprecated_users(message):
     channel_id = message.channel.id
     guild = bot.get_guild(int(server_id))
     if not guild:
-        print(F"[ERROR] Could not fetch guild! Is Discord down?")
+        if DEBUG:
+            print(F"[red][ERROR] Could not fetch guild! Is Discord down?")
         return
     members = []
     try:
         async for member in guild.fetch_members(limit=None): members.append(member)
         current_member_ids = {str(member.id) for member in members}
     except Exception as e:
-        print(f"[ERROR] Failed to fetch members: {e}")
+        if DEBUG:
+            print(f"[red][ERROR] Failed to fetch members: {e}")
         return
 
 
@@ -1444,6 +1504,12 @@ async def handle_set_default_channel(message):
 
     await send_message(f"{channel_name} has been set as the default channel.", message.channel.id)
     await async_save_json(SETTINGS_FILE, settings)
+
+async def get_channel_name(channel_id):
+    channel_id = int(channel_id)
+    channel = await bot.fetch_channel(channel_id)
+    channel_name = channel.name
+    return channel_name
 
 async def handle_toggle_command(message):
     content = message.content.strip()
@@ -1520,7 +1586,7 @@ async def start_auction_timers():
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
+    print(f"[green]Logged in as {bot.user}")
     asyncio.create_task(command_loop())
     await start_auction_timers()
 
@@ -1537,7 +1603,8 @@ async def send_message(message_to_send = "", channel_id = 0, pin = False):
         try:
             channel = await bot.fetch_channel(channel_id)
         except Exception as e:
-            print(f"[ERROR] Could not fetch channel {channel_id}: {e}")
+            if DEBUG:
+                print(f"[red][ERROR] Could not fetch channel {channel_id}: {e}")
             return
     sent = await channel.send(message_to_send)
     if pin == True: #Assuming if pinning, want everything else from the bot unpinned except the first message.
@@ -1569,10 +1636,12 @@ async def send_embed_message(embed_message, channel_id, pin = False):
 async def validate_user_permission(server_id, user_id):
     guild = bot.get_guild(server_id)
     if not guild:
-        print("Server not found")
+        if DEBUG:
+            print("[red]Server not found")
     user = await guild.fetch_member(user_id)
     if not user:
-        print("User not found")
+        if DEBUG:
+            print("[red]User not found")
     if user.guild_permissions.manage_channels:
         return True
     else:
@@ -1586,7 +1655,8 @@ async def unpin_bot_messages(channel_id, is_reset = False):
         try:
             channel = await bot.fetch_channel(channel_id)
         except Exception as e:
-            print(f"[ERROR][bot.py][unpin_bot_messages] Could not fetch channel {channel_id}")
+            if DEBUG:
+                print(f"[red][ERROR][bot.py][unpin_bot_messages] Could not fetch channel {channel_id}")
             return
     pinned_messages = await channel.pins()
     bot_user = bot.user
@@ -1601,28 +1671,14 @@ async def unpin_bot_messages(channel_id, is_reset = False):
             try:
                 await message.unpin()
             except Exception as e:
-                print(f"Failed to unpin message: {e}")
+                if DEBUG:
+                    print(f"[red]Failed to unpin message: {e}")
 
 async def send_batch_embeds(list_of_embeds, channel_id):
     channel = bot.get_channel(channel_id)
     for i in range(0, len(list_of_embeds), 10):
         await channel.send(embeds = list_of_embeds[i:i + 10])
 
-async def get_channel_name(channel_id):
-    channel_id = int(channel_id)
-    channel = await bot.fetch_channel(channel_id)
-    channel_name = channel.name
-    return channel_name
-
-async def get_game_channel_id(server_id):
-    settings = await async_load_json(SETTINGS_FILE)
-    channel_id = int(settings[server_id]["Game Channel"])
-    if channel_id:
-        return channel_id
-    else:
-        print(f"[ERROR] No game channel set.")
-        return None
-    
 async def get_display_name(server_id, user_id):
     guild = await get_guild(server_id)
     user = await guild.fetch_member(int(user_id))
@@ -1645,7 +1701,8 @@ async def get_user(server_id, user_id):
 async def get_user_id_from_username(server_id, name):
     guild = await get_guild(int(server_id))
     members = [member async for member in guild.fetch_members(limit=None)]
-    print(f"Fetched {len(members)} members")
+    if DEBUG:
+        print(f"[green]Fetched {len(members)} members")
     for member in members:
         if member.name.lower() == name.lower() or member.display_name.lower() == name.lower():
             return member.id

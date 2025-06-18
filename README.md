@@ -140,7 +140,7 @@ Recommended permissions:
 ⚙️ Commands & Usage
 -------------------
 
-### 🧑‍💼 User Commands (toggleable in settings)
+### 🧑‍💼 User Commands
 
 | Command | Description |
 | --- | --- |
